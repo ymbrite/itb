@@ -8,7 +8,6 @@ import re
 import urllib.request
 import urllib.error
 import subprocess
-import os
 from pathlib import Path
 
 
@@ -119,7 +118,7 @@ def create_markdown_file(file_path, title, date, categories, tags, content):
         f.write(content)
 
 
-def fetch_issues(owner, repo):
+def fetch_issues(owner, repo, creator=None):
     """获取仓库的所有 Issues"""
     issues = []
     page = 1
@@ -127,6 +126,8 @@ def fetch_issues(owner, repo):
     
     while True:
         url = f'https://api.github.com/repos/{owner}/{repo}/issues?state=all&page={page}&per_page={per_page}'
+        if creator:
+            url += f'&creator={creator}'
         data = fetch_github_api(url)
         
         if not data or len(data) == 0:
@@ -225,7 +226,7 @@ def main():
     
     # 6. 获取 Issues 并创建文章
     print("正在获取 Issues...")
-    issues = fetch_issues(owner, repo)
+    issues = fetch_issues(owner, repo, creator=owner)
     print(f"共获取到 {len(issues)} 个 Issues")
     
     # 创建 source/_posts 目录
@@ -234,6 +235,11 @@ def main():
     
     # 处理每个 Issue
     for issue in issues:
+        # 过滤掉 Pull Requests
+        if 'pull_request' in issue:
+            continue
+        
+        issue_number = issue['number']
         title = issue['title']
         body = issue.get('body') or ''
         created_at = issue['created_at']
@@ -241,9 +247,8 @@ def main():
         # 处理 labels
         categories, tags = process_labels(issue.get('labels', []))
         
-        # 生成文件名（使用标题作为文件名，替换特殊字符）
-        safe_title = re.sub(r'[^\w\u4e00-\u9fa5\-_]', '_', title)
-        filename = f'{created_at[:10]}-{safe_title}.md'
+        # 生成文件名（使用 issue 编号）
+        filename = f'{issue_number}.md'
         file_path = posts_dir / filename
         
         # 创建 Markdown 文件
